@@ -44,3 +44,8 @@ proc `containers/item/*`(self: APIImpl, id: string): ContainerServer =
 proc `sendTextMessage`(self: APIImpl, target: string, body: string): Future[tuple[ok: bool, info: string]] =
   # ...
   discard
+
+proc main() =
+  restDispatchRequest(APIImpl, [], req)
+  let api = APIImpl()
+  let srv = restServer(api)
