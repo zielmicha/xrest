@@ -1,10 +1,16 @@
+import reactor/async, reactor/http/httpcommon, collections, json
 
 type
   RestRef* = object
     path*: string
 
-  RestRequest* = object
-    verb*: string
-    path*: seq[string]
+  RestRequest* = HttpRequest
+  RestResponse* = HttpResponse
 
-  RestResponse* = object
+export httpcommon
+
+proc toJson*(r: RestRef): JsonNode =
+  return %{"_ref": %r.path}
+
+proc fromJson*(self: JsonNode, t: typedesc[RestRef]): RestRef =
+  return RestRef(path: self["_ref"].stringVal)
