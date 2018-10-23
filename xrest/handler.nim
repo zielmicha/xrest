@@ -1,35 +1,5 @@
 import macros, tables, algorithm, strutils, sequtils, reactor, json, collections, reactor/http
-import xrest/pathcall, xrest/types, xrest/serialize
-
-var restTypes {.compiletime.} = initTable[string, NimNode]()
-
-proc getTypeName(typ: NimNode): string =
-  var typ = typ.getType
-  assert typ.kind == nnkBracketExpr
-  assert $(typ[0]) == "typeDesc"
-  typ = typ[1]
-
-  var s: seq[string]
-  assert typ.kind == nnkSym
-
-  var node = typ
-  while node != nil:
-    s.add $node
-    node = node.owner
-  s.reverse
-
-  return s.join(".")
-
-macro restRefInternal*(name: typed, body: untyped): untyped =
-  restTypes[name.getTypeName] = body
-
-macro restRef*(name: untyped, body: untyped): untyped =
-  let x = newCall(bindSym"quote", body)
-
-  return quote do:
-    type `name` = object
-
-    restRefInternal(`name`, `body`)
+import xrest/pathcall, xrest/types, xrest/serialize, xrest/client
 
 proc unserializeBody*[T](r: RestRequest, typ: typedesc[T]): Future[T] {.async.} =
   when T is RestRequest:

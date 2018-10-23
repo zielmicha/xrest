@@ -1,26 +1,5 @@
 import xrest, reactor/http, collections/random
-
-type
-  ListInfo = object
-    title*: string
-    description*: string
-
-  NoteData = object
-    info*: string
-
-restRef Note:
-  get() -> NoteData
-  update(NoteData)
-  delete()
-
-restRef NoteCollection:
-  collection(Note)
-  create(NoteData) -> RestRef
-
-restRef TodoList:
-  sub("notes", NoteCollection)
-  update(ListInfo)
-  get() -> ListInfo
+import todo_types
 
 type
   TodoListImpl = ref object

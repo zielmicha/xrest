@@ -1,6 +1,6 @@
 import json, sequtils, macros, tables
 
-proc fromJson*(node: JsonNode, typ: typedesc[int]): int =
+proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[int]): int =
   if node.kind != JInt:
     raise newException(ValueError, "expected integer")
 
@@ -9,7 +9,7 @@ proc fromJson*(node: JsonNode, typ: typedesc[int]): int =
 proc toJson*(t: int): JsonNode =
   return %t
 
-proc fromJson*(node: JsonNode, typ: typedesc[string]): string =
+proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[string]): string =
   if node.kind != JString:
     raise newException(ValueError, "expected string")
 
@@ -18,11 +18,14 @@ proc fromJson*(node: JsonNode, typ: typedesc[string]): string =
 proc toJson*(t: string): JsonNode =
   return %t
 
-proc fromJson*[T](node: JsonNode, typ: typedesc[seq[T]]): seq[T] =
+proc fromJson*[T](ctx: any, node: JsonNode, typ: typedesc[seq[T]]): seq[T] =
   if node.kind != JArray:
     raise newException(ValueError, "expected array")
 
-  return node.elems.mapIt(fromJson(it))
+  return node.elems.mapIt(fromJson(ctx, it))
+
+proc fromJson*(node: JsonNode, typ: typedesc): auto =
+  return fromJson(0, node, typ)
 
 proc toJson*[T](t: seq[T]): JsonNode =
   return %(t.mapIt(toJson(it)))
@@ -44,9 +47,9 @@ macro fromJsonObject(res: typed, d: typed): untyped =
     var fieldStr = newStrLitNode(fieldName)
     result.add(quote do:
       if `fieldStr` in `d`:
-        `res`.`fieldIdent` = fromJson(`d`[`fieldStr`], type(`res`.`fieldIdent`)))
+        `res`.`fieldIdent` = fromJson(ctx, `d`[`fieldStr`], type(`res`.`fieldIdent`)))
 
-proc fromJson*[T: object|ref object](node: JsonNode, typ: typedesc[T]): T =
+proc fromJson*[T: object|ref object](ctx: any, node: JsonNode, typ: typedesc[T]): T =
   if node.kind != JObject:
     raise newException(ValueError, "expected object")
 
