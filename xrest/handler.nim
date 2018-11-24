@@ -11,8 +11,12 @@ proc unserializeBody*[T](r: RestRequest, typ: typedesc[T]): Future[T] {.async.} 
 
     asyncRaise "request body missing"
 
-proc restSerialize*[T](t: T): RestResponse =
-  when T is RestResponse:
+proc restSerialize*[T](t: T): auto =
+  when T is Future[void]:
+    return t.then(() => newHttpResponse("", statusCode=204))
+  elif T is Future:
+    return t.then(x => restSerialize(x))
+  elif T is RestResponse:
     return t
   elif T is void:
     return newHttpResponse("", statusCode=204)
@@ -103,7 +107,7 @@ macro restDispatchRequest*(typ: typed, callPath: typed, req: typed): untyped =
     assert call.kind == nnkCall
 
     let newCall = newNimNode(nnkCall)
-    newCall.add(newIdentNode("dispatchRequest" & $call[0]))
+    newCall.add(newIdentNode("dispatchRequest_" & $call[0]))
     newCall.add(req)
     newCall.add(callPath)
     newCall.add(toSeq(call)[1..^1])
@@ -130,5 +134,5 @@ proc restHandle*[T](typ: typedesc[T], impl: any, r: HttpRequest): Future[HttpRes
 
   return r
 
-proc restHandler*[T](typ: typedesc[T], impl: any): (proc(r: HttpRequest): Future[HttpResponse]) =
+proc restHandler*[T](typ: typedesc[T], impl: any): RestHandler =
   return proc(r: HttpRequest): Future[HttpResponse] = return restHandle(typ, impl, r)

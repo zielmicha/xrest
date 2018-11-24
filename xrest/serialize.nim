@@ -1,4 +1,6 @@
-import json, sequtils, macros, tables
+import json, sequtils, macros, tables, typetraits
+
+type NoContext = object
 
 proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[int]): int =
   if node.kind != JInt:
@@ -22,10 +24,10 @@ proc fromJson*[T](ctx: any, node: JsonNode, typ: typedesc[seq[T]]): seq[T] =
   if node.kind != JArray:
     raise newException(ValueError, "expected array")
 
-  return node.elems.mapIt(fromJson(ctx, it))
+  return node.elems.mapIt(fromJson(ctx, it, T))
 
 proc fromJson*(node: JsonNode, typ: typedesc): auto =
-  return fromJson(0, node, typ)
+  return fromJson(NoContext(), node, typ)
 
 proc toJson*[T](t: seq[T]): JsonNode =
   return %(t.mapIt(toJson(it)))
@@ -66,6 +68,8 @@ macro toJsonObject(res: typed, d: typed): untyped =
       `res`[`fieldStr`] = toJson(`d`.`fieldIdent`))
 
 proc toJson*[T: object|ref object](t: T): JsonNode =
+  static:
+    doAssert(T is not Future, "attempt to JSON-serialize Future")
   result = newJObject()
   toJsonObject(result, t)
 

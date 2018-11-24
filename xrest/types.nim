@@ -8,6 +8,8 @@ type
   RestRequest* = HttpRequest
   RestResponse* = HttpResponse
 
+  RestHandler* = (proc(r: HttpRequest): Future[HttpResponse])
+
 const jsonSizeLimit* {.intdefine.} = 4 * 1024 * 1024
 
 export http
@@ -15,8 +17,17 @@ export http
 proc toJson*(r: RestRef): JsonNode =
   return %{"_ref": %r.path}
 
-proc fromJson*(self: JsonNode, t: typedesc[RestRef]): RestRef =
-  return RestRef(path: self["_ref"].stringVal)
+proc fromJson*(ctx: any, self: JsonNode, t: typedesc[RestRef]): RestRef =
+  return RestRef(path: $self["_ref"])
+
+proc toJson*[T: distinct](r: T): JsonNode =
+  return RestRef(r).toJson
+
+proc fromJson*[T: distinct](ctx: any, self: JsonNode, t: typedesc[T]): T =
+  return T(fromJson(ctx, self, RestRef))
+
+proc makeRef*[T](t: typedesc[T], path: string): T =
+  return T(RestRef(path: path))
 
 proc appendPathFragment*(a: string, b: string): string =
   if '/' in b:
