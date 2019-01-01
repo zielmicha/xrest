@@ -1,6 +1,7 @@
-import json, sequtils, macros, tables, typetraits
+import json, sequtils, macros, tables, typetraits, strutils, options
 
-type NoContext = object
+type
+  NoContext* = object
 
 proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[int]): int =
   if node.kind != JInt:
@@ -11,6 +12,27 @@ proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[int]): int =
 proc toJson*(t: int): JsonNode =
   return %t
 
+proc fromJson*[T](ctx: any, node: JsonNode, typ: typedesc[Option[T]]): Option[T] =
+  if node.kind == JNull:
+    return none(T)
+  else:
+    return some(fromJson(ctx, node, T))
+
+proc toJson*(t: Option): JsonNode =
+  if t.isSome:
+    return toJson(t.get)
+  else:
+    return newJNull()
+
+proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[float]): float =
+  if node.kind != JFloat:
+    raise newException(ValueError, "expected float")
+
+  return node.fnum
+
+proc toJson*(t: float): JsonNode =
+  return %t
+
 proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[string]): string =
   if node.kind != JString:
     raise newException(ValueError, "expected string")
@@ -19,6 +41,27 @@ proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[string]): string =
 
 proc toJson*(t: string): JsonNode =
   return %t
+
+proc fromJson*(ctx: any, node: JsonNode, typ: typedesc[bool]): bool =
+  if node.kind != JBool:
+    raise newException(ValueError, "expected boolean")
+
+  return node.bval
+
+proc toJson*(t: bool): JsonNode =
+  return %t
+
+proc fromJson*[T: enum](ctx: any, node: JsonNode, typ: typedesc[T]): enum =
+  if node.kind != JString:
+    raise newException(ValueError, "expected string")
+
+  when compiles(T.unknown):
+    return parseEnum[T](node.str, T.unknown)
+  else:
+    return parseEnum[T](node.str)
+
+proc toJson*[T: enum](t: T): JsonNode =
+  return %($t)
 
 proc fromJson*[T](ctx: any, node: JsonNode, typ: typedesc[seq[T]]): seq[T] =
   if node.kind != JArray:
@@ -34,6 +77,7 @@ proc toJson*[T](t: seq[T]): JsonNode =
 
 proc getFields(t: NimNode): seq[string] =
   var res = t.getType
+
   if res.kind == nnkBracketExpr and $res[0] == "ref":
     res = res[1].getType
 

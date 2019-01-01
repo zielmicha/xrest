@@ -10,15 +10,36 @@ type
 
   RestHandler* = (proc(r: HttpRequest): Future[HttpResponse])
 
+  RestRefContext* = object
+    r*: RestRef
+
 const jsonSizeLimit* {.intdefine.} = 4 * 1024 * 1024
 
 export http
 
+proc `$`*(r: RestRef): string =
+  return r.path
+
 proc toJson*(r: RestRef): JsonNode =
   return %{"_ref": %r.path}
 
+proc fromJson*(ctx: RestRefContext, self: JsonNode, t: typedesc[RestRef]): RestRef =
+  if "_ref" notin self or self["_ref"].kind != JString:
+    raise newException(ValueError, "expected ref JSON, got $1" % $self)
+
+  var path = ctx.r.path
+  if not path.endswith("/"): path &= "/"
+  assert path.endswith('/')
+
+  # we anyway don't interpret '..', so this is only a simple sanity check
+  assert "/../" notin path and "/./" notin path and "//" notin path
+
+  var newPath = path & self["_ref"].str
+  if not newPath.endswith("/"): newPath &= "/"
+  return RestRef(path: newPath, sess: ctx.r.sess)
+
 proc fromJson*(ctx: any, self: JsonNode, t: typedesc[RestRef]): RestRef =
-  return RestRef(path: $self["_ref"])
+  {.fatal: "unserializing RestRef requires a context".}
 
 proc toJson*[T: distinct](r: T): JsonNode =
   return RestRef(r).toJson
@@ -36,9 +57,16 @@ proc appendPathFragment*(a: string, b: string): string =
   result = a
   if not result.endswith('/'): result &= "/"
   result &= b
+  if not result.endswith('/'): result &= "/"
 
 proc appendPathFragment*(self: RestRef, b: string): RestRef =
   return RestRef(sess: self.sess, path: appendPathFragment(self.path, b))
+
+proc `/`*(self: RestRef, b: string): RestRef =
+  return appendPathFragment(self, b)
+
+proc `/`*[T: distinct](self: T, b: string): RestRef =
+  return appendPathFragment(RestRef(self), b)
 
 proc transformRef*(node: JsonNode, transformer: (proc(r: string): string)): JsonNode =
   case node.kind:

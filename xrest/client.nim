@@ -25,9 +25,12 @@ macro restRefInternal*(name: typed, body: untyped): untyped =
 
 macro restRef*(name: untyped, body: untyped): untyped =
   let x = newCall(bindSym"quote", body)
+  let dollar = newIdentNode("$")
 
   return quote do:
     type `name`* = distinct RestRef
+
+    proc `dollar`*(r: `name`): string {.borrow.}
 
     restRefMakeClient(`name`, `body`)
 
@@ -37,7 +40,7 @@ template emitClient_get*(selfType: typed, resultType: typed) =
   proc get*(self: selfType): Future[resultType] =
     return get(RestRef(self), resultType)
 
-proc unserializeResponse[T](resp: HttpResponse, t: typedesc[T]): Future[T] {.async.} =
+proc unserializeResponse[T](context: RestRef, resp: HttpResponse, t: typedesc[T]): Future[T] {.async.} =
   when T is HttpResponse:
     return resp
   elif T is void:
@@ -48,7 +51,7 @@ proc unserializeResponse[T](resp: HttpResponse, t: typedesc[T]): Future[T] {.asy
 
     let body = await resp.dataInput.readUntilEof(limit=jsonSizeLimit)
     let node = parseJson(body)
-    return fromJson(node, T)
+    return fromJson(RestRefContext(r: context), node, T)
 
 proc serializeRequest(t: any): tuple[contentType: string, body: string] =
   let node = toJson(t)
@@ -68,7 +71,7 @@ proc create*[T](self: RestRef, val: any, t: typedesc[T]): Future[T] {.async.} =
                                   headers=headerTable({"content-type": contentType}))
 
   r.raiseForStatus
-  return unserializeResponse(r, T)
+  return unserializeResponse(self, r, T)
 
 proc delete*(self: RestRef) {.async.} =
   let r = await self.sess.request("DELETE", self.path)
@@ -80,7 +83,7 @@ proc get*[T](self: RestRef, t: typedesc[T]): Future[T] {.async.} =
 
   let r = await self.sess.request("GET", self.path)
   r.raiseForStatus
-  return unserializeResponse(r, T)
+  return unserializeResponse(self, r, T)
 
 template emitClient_update*(selfType: typed, resultType: typed, argType: typed) =
   proc update*(self: selfType, val: argType): Future[void] =
@@ -98,9 +101,15 @@ template emitClient_collection*(selfType: typed, resultType: typed, argType: typ
   proc `[]`*(self: selfType, id: string): argType =
     return argType(appendPathFragment(RestRef(self), id))
 
+template basicCollection*(valueType, refType) =
+  restRef `valueType Collection`:
+    collection(refType)
+    create(valueType) -> refType
+    get() -> seq[refType]
+
 template emitClient_create*(selfType: typed, resultType: typed, argType: typed) =
-  proc create*(self: selfType, val: argType): Future[argType] =
-    return create(RestRef(self), val, argType)
+  proc create*(self: selfType, val: argType): Future[resultType] =
+    return create(RestRef(self), val, resultType)
 
 macro emitClient_sub*(selfType: typed, resultType: typed, name: untyped, subType: typed): untyped =
   let nameIdent = newIdentNode(name.strVal)
@@ -108,7 +117,13 @@ macro emitClient_sub*(selfType: typed, resultType: typed, name: untyped, subType
     proc `nameIdent`*(self: `selfType`): `subType` =
       return `subType`(appendPathFragment(RestRef(self), `name`))
 
-proc getCalls(body: NimNode): seq[tuple[call: NimNode, resultType: NimNode]] =
+macro emitClient_rawRequest*(selfType: typed, resultType: typed, name: untyped): untyped =
+  let nameIdent = newIdentNode(name.strVal)
+  return quote do:
+    proc `nameIdent`*(self: `selfType`, req: HttpRequest): Future[HttpResponse] =
+      return RestRef(self).sess.request(req.httpMethod, req.path, req.data, req.headers)
+
+proc getCalls*(body: NimNode): seq[tuple[call: NimNode, resultType: NimNode]] =
   for call in body:
     if call.kind == nnkDiscardStmt:
       continue

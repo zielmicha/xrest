@@ -18,6 +18,6 @@ restRef NoteCollection:
   create(NoteData) -> RestRef
 
 restRef TodoList:
-  sub("notes", NoteCollection)
   update(ListInfo)
+  sub("notes", NoteCollection)
   get() -> ListInfo
