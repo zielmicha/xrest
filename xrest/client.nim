@@ -51,7 +51,10 @@ proc unserializeResponse[T](context: RestRef, resp: HttpResponse, t: typedesc[T]
 
     let body = await resp.dataInput.readUntilEof(limit=jsonSizeLimit)
     let node = parseJson(body)
-    return fromJson(RestRefContext(r: context), node, T)
+    when T is JsonNode:
+      return node
+    else:
+      return fromJson(RestRefContext(r: context), node, T)
 
 proc serializeRequest(t: any): tuple[contentType: string, body: string] =
   let node = toJson(t)
