@@ -110,6 +110,11 @@ template basicCollection*(valueType, refType) =
     create(valueType) -> refType
     get() -> seq[refType]
 
+template immutableCollection*(valueType, refType) =
+  restRef `valueType Collection`:
+    collection(refType)
+    get() -> seq[refType]
+
 template emitClient_create*(selfType: typed, resultType: typed, argType: typed) =
   proc create*(self: selfType, val: argType): Future[resultType] =
     return create(RestRef(self), val, resultType)
